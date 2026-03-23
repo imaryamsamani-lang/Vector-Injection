@@ -22,15 +22,15 @@ Latent Memory Injection (LMI) is a novel mechanism for integrating external know
 
 LMI integrates retrieved latent vectors into hidden states before self-attention. The gating scalar 𝛼 controls injection strength dynamically:
 
-<img src="schematic.png" alt="" width="1000" height="500">
+<img src="schematics/schematic.png" alt="" width="1000" height="500">
 
 Mathematical formulation for a single token:
 
-<img src="layer_level_operations.png" alt="" width="1000" height="500">
+<img src="schematics/layer_level_operations.png" alt="" width="1000" height="500">
 
 End-to-End Workflow:
 
-<img src="workflow.png" alt="" width="1000" height="500">
+<img src="schematics/workflow.png" alt="" width="1000" height="500">
 
 
 ### Repository Structure
