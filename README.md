@@ -210,6 +210,6 @@ If you use LMI in your research, please cite:
   author={Asad Samani, Maryam},
   journal={SSRN},
   year={2026},
-  url={[https://github.com/yourusername/latent-memory-injection](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6514258)}
+  url={https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6514258}
 }
 ```
