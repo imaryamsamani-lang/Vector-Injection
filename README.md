@@ -205,11 +205,11 @@ python retrieve_metrics.py   --test_file ./data/legal/test.jsonl   --knowledge_b
 If you use LMI in your research, please cite:
 
 ```bibtex
-@article{samani2026lmi,
+@technicalreport{samani2026lmi,
   title={LMI: Latent Memory Injection for Efficient and Modular Knowledge Access in Language Models},
   author={Asad Samani, Maryam},
-  journal={arXiv preprint},
+  journal={SSRN},
   year={2026},
-  url={https://github.com/yourusername/latent-memory-injection}
+  url={[https://github.com/yourusername/latent-memory-injection](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6514258)}
 }
 ```
