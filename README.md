@@ -71,7 +71,6 @@ End-to-End Workflow:
 │   └── sports.jsonl                # Sports domain predictions
 ├── database.py                     # Knowledge base management
 ├── evaluation.py                   # Evaluation metrics
-├── finetune.py                     # Fine-tuning utilities
 ├── retrieve_metrics.py             # Retrieval quality metrics
 ├── requirements.txt                # Python dependencies
 ├── setup.py                        # Package installation
@@ -131,23 +130,6 @@ This creates knowledge embeddings and FAISS indexes in ./knowledge/legal/:
 train_knowledge.pkl, train_index.faiss
 val_knowledge.pkl, val_index.faiss
 test_knowledge.pkl, test_index.faiss
-
-#### Train LMI Components
-
-Fine-tune Gemma with Dynamic V-Matrix Injection. Only trains the injection components (projector, gate, retriever query projection).
-Base Gemma model weights remain frozen.
-
-```bash
-python finetune.py --model_path path_to_model.ckpt \
-                   --knowledge_path path_to_knowledge.pkl \
-                   --train_data ./data/legal/train.jsonl \
-                   --val_data ./data/legal/val.jsonl \
-                   --test_data ./data/legal/test.jsonl \
-                   --output_dir ./outputs \
-                   --num_epochs 5 \
-                   --batch_size 32 \
-                   --learning_rate 1e-4 
- ```
 
 #### Demo (Single Inference)
 
