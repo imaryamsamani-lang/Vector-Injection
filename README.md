@@ -6,15 +6,15 @@ Latent Memory Injection (LMI) is a novel mechanism for integrating external know
 
 ## Key Features
 
-🔄 Zero-Shot Knowledge Swapping: Switch between knowledge domains (medical, legal, sports) by simply swapping FAISS indices—no model retraining required.
+- Zero-Shot Knowledge Swapping: Switch between knowledge domains (medical, legal, sports) by simply swapping FAISS indices—no model retraining required.
 
-⚡ Computational Efficiency: Fixed sequence length, no quadratic attention overhead from retrieved text.
+- Computational Efficiency: Fixed sequence length, no quadratic attention overhead from retrieved text.
 
-🎯 Adaptive Gating: Learnable gating mechanism modulates memory injection token-by-token.
+- Adaptive Gating: Learnable gating mechanism modulates memory injection token-by-token.
 
-🧊 Frozen Base Model: Only lightweight projector, gate, and LoRA parameters are trained.
+- Frozen Base Model: Only lightweight projector, gate, and LoRA parameters are trained.
 
-📊 Multi-Domain Evaluation: Pre-built datasets and knowledge bases for medical, legal, and sports domains.
+- Multi-Domain Evaluation: Pre-built datasets and knowledge bases for medical, legal, and sports domains.
 
 ## Architecture
 
