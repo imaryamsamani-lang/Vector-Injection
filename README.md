@@ -136,9 +136,29 @@ test_knowledge.pkl, test_index.faiss
 Single query inference for fine-tuned Gemma with Dynamic V-Matrix Injection. Returns response with inference time and VRAM usage.
 
 ```bash
-python scripts/inference.py --checkpoint path_to_fine_tuned_model.ckpt \
+python scripts/inference_single.py --checkpoint path_to_fine_tuned_model.ckpt \
                             --knowledge_path ./knowledge/legal/test_knowledge.pkl \
+                            --top_k k \
                             --query "Who is the respondent in the case Union of India vs. Maj. Gen. Manomoy Ganguly?"
+```
+
+#### Finetune
+
+Fine-tuning script for Gemma with Dynamic V-Matrix Injection. Only trains the injection components (projector, gate, retriever query projection). Base Gemma model weights remain frozen.
+```bash
+python finetune.py \
+  --model_path path_to_gemma_checkpoint.ckpt \
+  --model_type 2b \
+  --train_data ./data/domain/train.jsonl \
+  --val_data ./data/domain/val.jsonl \
+  --test_data ./data/domain/test.jsonl \
+  --knowledge_path ./knowledge/domain/full_knowledge.pkl \
+  --num_epochs 5 \
+  --batch_size 8 \
+  --learning_rate 3e-5 \
+  --max_length 50000 \
+  --output_dir  ./fine_tuned_with_knowledge/domain/domain.ckpt
+
 ```
 
 #### Model Inference on the Test Dataset
