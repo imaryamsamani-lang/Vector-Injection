@@ -22,6 +22,7 @@ from gemma import config as gemma_config
 from gemma.model import precompute_freqs_cis, KnowledgeRetriever, Projector, ValueInjectionGate
 from gemma.config import AttentionType
 import gc
+import time
 
 # Import your model
 sys.path.append('gemma_pytorch')
@@ -551,6 +552,33 @@ def main():
             ppl_improvement = ((baseline_ppl - tuned_ppl) / baseline_ppl) * 100
             print(f"Perplexity Improvement: {ppl_improvement:.2f}%")
     
+    # If output_dir is on a Google-Drive mount, the copy-with-size-check in
+    # fine_tune_injection() above only confirms the local FUSE cache looks
+    # complete -- it does NOT force Drive's backend to actually finish
+    # receiving those bytes. If the Colab session ends (disconnects, times
+    # out, or you just close the tab) before that background sync
+    # completes, the remote copy can still be truncated even though every
+    # local check passed. drive.flush_and_unmount() is Colab's own
+    # mechanism for forcing all pending Drive writes to complete before the
+    # mount goes away -- call it here, right after the last save, rather
+    # than leaving it to chance. Only applies inside Colab; harmless
+    # elsewhere.
+    if "/content/drive/" in os.path.abspath(args.output_dir):
+        try:
+            from google.colab import drive
+            print("Flushing pending Google Drive writes before exiting "
+                  "(forces the checkpoint's upload to actually finish, "
+                  "instead of leaving it to Drive's background sync)...")
+            drive.flush_and_unmount()
+            print("✓ Drive flush complete. Re-mount before running inference.")
+        except ImportError:
+            pass  # not running in Colab
+        except Exception as e:
+            print(f"⚠️  drive.flush_and_unmount() failed ({e}) -- wait a "
+                  f"minute or two before disconnecting/starting inference "
+                  f"to give Drive's background sync time to finish, or "
+                  f"load directly from the local .tmp path printed above.")
+
     print(f"\nTraining complete! Checkpoints saved to {args.output_dir}")
 
 # Rest of the functions remain the same (KnowledgeInjectionDataset, collate_fn, etc.)
@@ -1096,24 +1124,69 @@ def fine_tune_injection(
             # path too if one existed. Write to a temp file first, then
             # atomically replace the real path only once the write (and a
             # basic re-load check) succeeds.
-            tmp_path = output_dir + ".tmp"
+            # BUG FIX (the actual root cause of "works in-session, missing
+            # layers after reconnect"): model.state_dict() saves the ENTIRE
+            # ~2.5B-parameter Gemma-2B model, ~5GB, even though only the
+            # ~24M-parameter LMI pathway (projector/gate/retriever-LoRA/
+            # attention-LoRA) is actually trained -- every frozen base
+            # weight is saved unchanged every single checkpoint. That's a
+            # long upload for Drive to sync (easily minutes), which is
+            # exactly the window a Colab disconnect lands in: the local
+            # write "completes" and reads back fine within the same
+            # session, but Drive's remote backend hasn't received the tail
+            # of a multi-GB upload yet -- so a fresh session later gets a
+            # truncated file, surfacing as "missing layers". A ~100MB
+            # trainable-only file finishes syncing in seconds, shrinking
+            # that race window by ~50x. inference_single.py now loads base
+            # Gemma weights from --base_weights separately and overlays
+            # this small file on top (previously base_weights_path was an
+            # unused parameter -- the fine-tuned checkpoint had to contain
+            # everything because nothing else ever loaded the base model).
+            trainable_state_dict = {
+                name: p.detach().cpu()
+                for name, p in model.named_parameters()
+                if p.requires_grad
+            }
+            import shutil, tempfile
+            local_tmp = os.path.join(tempfile.gettempdir(),
+                                      os.path.basename(output_dir) + ".tmp")
             try:
+                import datetime
                 torch.save({
-                    'model_state_dict': model.state_dict(),
+                    'model_state_dict': trainable_state_dict,  # TRAINABLE PARAMS ONLY
                     'optimizer_state_dict': optimizer.state_dict(),
                     'epoch': epoch,
                     'val_loss': avg_val_loss,
                     'gate_tau': tau,
-                }, tmp_path)
-                # Verify the file isn't corrupted before trusting it.
-                torch.load(tmp_path, map_location="cpu", weights_only=True)
-                os.replace(tmp_path, output_dir)  # atomic on POSIX
-                print(f"🏆 New best model saved (Val Loss: {avg_val_loss:.4f}) -> {output_dir}")
+                    'saved_at_unix': time.time(),
+                    'saved_at_readable': datetime.datetime.now().isoformat(),
+                    'param_names_sorted': sorted(trainable_state_dict.keys()),
+                    'num_params_saved': len(trainable_state_dict),
+                    'trainable_only': True,  # tells inference_single.py to load base weights separately
+                }, local_tmp)
+                # Verify on local disk -- a real, independent read, not a
+                # Drive-cache hit.
+                torch.load(local_tmp, map_location="cpu", weights_only=True)
+                local_size = os.path.getsize(local_tmp)
+
+                os.makedirs(os.path.dirname(output_dir) or ".", exist_ok=True)
+                shutil.copy2(local_tmp, output_dir)
+                drive_size = os.path.getsize(output_dir)
+                if drive_size != local_size:
+                    raise RuntimeError(
+                        f"Copy to {output_dir} has size {drive_size} bytes, "
+                        f"expected {local_size} -- Drive sync likely still "
+                        f"in progress or failed. The verified file is still "
+                        f"available locally at {local_tmp}."
+                    )
+                print(f"🏆 New best model saved (Val Loss: {avg_val_loss:.4f}) -> {output_dir} "
+                      f"(verified locally at {local_tmp} before copying)")
             except Exception as e:
                 print(f"⚠️  Checkpoint save/verify failed ({e}); "
-                      f"leaving previous checkpoint at {output_dir} untouched.")
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
+                      f"leaving previous checkpoint at {output_dir} untouched. "
+                      f"If a size mismatch was reported, wait for Drive to "
+                      f"finish syncing and manually copy {local_tmp} to "
+                      f"{output_dir}, or load directly from {local_tmp}.")
 
     return model
 
