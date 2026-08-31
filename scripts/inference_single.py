@@ -158,6 +158,20 @@ def load_model_memory_efficient(
         ft_sd = ft_ckpt
     
     print(f"   Loaded state dict with {len(ft_sd)} keys")
+
+    # Surface exactly when/what produced this file, immediately, instead
+    # of it only being inferable later from missing-key counts or garbage
+    # generation output. Old checkpoints (saved before this stamp existed)
+    # simply won't have these fields -- that absence is itself a strong
+    # signal the file predates the current architecture.
+    if 'saved_at_readable' in ft_ckpt:
+        print(f"   📅 Checkpoint saved at: {ft_ckpt['saved_at_readable']} "
+              f"({ft_ckpt.get('num_params_saved', '?')} params, "
+              f"val_loss={ft_ckpt.get('val_loss', '?')})")
+    else:
+        print(f"   ⚠️  This checkpoint has no save-timestamp metadata -- "
+              f"it predates the current finetune.py and is almost "
+              f"certainly stale.")
     
     # ========== STEP 2: Load ALL weights directly to GPU ==========
     device = torch.device(device)
@@ -181,7 +195,46 @@ def load_model_memory_efficient(
             if missing_count < 10:  # Show first 10 missing
                 print(f"⚠️  Missing: {name}")
     
-    print(f"   ✅ Loaded {loaded_count} parameters, {missing_count} missing")
+    if missing_count == 0:
+        print(f"   ✅ Loaded {loaded_count} parameters, {missing_count} missing")
+    else:
+        # Easy to miss as a single scrollable line buried in FAISS-loading
+        # spam -- and this exact situation (a stale checkpoint saved under
+        # an older architecture silently loading with missing_count > 0,
+        # falling back to untrained/random init for those params) has come
+        # up repeatedly. Make it impossible to scroll past.
+        missing_categories = {}
+        for name, param in model.named_parameters():
+            found = any(
+                k in ft_sd and ft_sd[k].shape == param.shape
+                for k in [name, name.replace("model.", ""), f"model.{name}"]
+            )
+            if not found:
+                if 'qkv_lora' in name or 'o_lora' in name:
+                    cat = 'attention LoRA'
+                elif 'query_lora_adapters' in name:
+                    cat = 'retriever query-LoRA'
+                elif 'projector' in name:
+                    cat = 'projector (up_proj/down_proj/norm)'
+                elif 'injection_gate' in name:
+                    cat = 'injection gate'
+                else:
+                    cat = 'other'
+                missing_categories[cat] = missing_categories.get(cat, 0) + 1
+        print(f"\n{'!'*60}")
+        print(f"!! WARNING: {missing_count} params NOT FOUND in this checkpoint.")
+        print(f"!! This checkpoint does not match the current model")
+        print(f"!! architecture -- it is almost certainly STALE (saved by")
+        print(f"!! an older version of finetune.py/model.py). Every")
+        print(f"!! missing param falls back to a fresh/random init value,")
+        print(f"!! meaning it was NEVER TRAINED, even though loading")
+        print(f"!! 'succeeds'. Double-check --checkpoint points at the")
+        print(f"!! file you actually just finished training, not a stale")
+        print(f"!! copy at the same path.")
+        for cat, count in sorted(missing_categories.items()):
+            print(f"!!   - {cat}: {count} missing")
+        print(f"{'!'*60}\n")
+        print(f"   Loaded {loaded_count} parameters, {missing_count} missing")
     
     # ========== STEP 3: Load knowledge separately ==========
     print("3. Loading knowledge base...")
